@@ -61,8 +61,8 @@ Assets/
    ├─ Materials/                  ← CV_Agua, CV_Roca_Calcarea, CV_Piedras, CV_Subsuelo_Corte, CV_Particula_*
    └─ Texturas/                   ← sprites UI redondeados y partícula suave (generados)
 Documentacion/
-├─ Guia_Cenote_Vivo.md            ← este documento
 └─ capturas/                      ← capturas de cada vista (limpio / contaminado)
+README.md                         ← este documento (guía del proyecto)
 ```
 
 ### 1.2 Flujo de pantallas
@@ -360,11 +360,11 @@ Explora el cenote y descubre cómo lo que hacemos en la superficie llega al agua
 
 | | |
 |---|---|
-| Día, vista general (selva y claro) ![](capturas/02_dia_vista_general.png) | Día, nivel del agua (lianas y raíces) ![](capturas/03_dia_nivel_agua.png) |
-| Noche, vista general (faroles y luciérnagas) ![](capturas/05_noche_vista_general.png) | Noche, corte del subsuelo ![](capturas/04_noche_corte.png) |
-| Contaminado, vista general (vegetación marchita, derrames, basura) ![](capturas/06_contaminado_vista_general.png) | Contaminado de noche, nivel del agua ![](capturas/07_contaminado_nivel_agua_noche.png) |
+| Día, vista general (selva y claro) ![](Documentacion/capturas/02_dia_vista_general.png) | Día, nivel del agua (lianas y raíces) ![](Documentacion/capturas/03_dia_nivel_agua.png) |
+| Noche, vista general (faroles y luciérnagas) ![](Documentacion/capturas/05_noche_vista_general.png) | Noche, corte del subsuelo ![](Documentacion/capturas/04_noche_corte.png) |
+| Contaminado, vista general (vegetación marchita, derrames, basura) ![](Documentacion/capturas/06_contaminado_vista_general.png) | Contaminado de noche, nivel del agua ![](Documentacion/capturas/07_contaminado_nivel_agua_noche.png) |
 
-Menú de inicio: ![](capturas/01_menu_inicio.png)
+Menú de inicio: ![](Documentacion/capturas/01_menu_inicio.png)
 
 *(Las capturas de la escena 3D se tomaron en Play, sin la capa de UI).*
 
