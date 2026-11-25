@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -25,6 +25,7 @@ namespace CenoteVivo.EditorTools
         const string EscenaOrigen = "Assets/Scenes/SampleScene.unity";
         const string EscenaCenote = CarpetaEscenas + "/CenoteVivo.unity";
         const string EscenaMenu = CarpetaEscenas + "/MenuInicio.unity";
+        internal const string EscenaAR = CarpetaEscenas + "/CenoteAR.unity";
 
         // Nombres de los objetos raíz que crea el constructor (se borran al reconstruir).
         static readonly string[] ObjetosGenerados =
@@ -39,21 +40,24 @@ namespace CenoteVivo.EditorTools
             Directory.CreateDirectory(CarpetaMateriales);
             ActivarOpaqueTexture();
 
-            if (!ConstruirEscenaCenote()) return;
+            if (!ConstruirEscenaCenote(EscenaCenote, false)) return;
+            // Escena de realidad aumentada (Vuforia): el mismo cenote como miniatura sobre la mesa.
+            if (!ConstruirEscenaCenote(EscenaAR, true)) return;
             ConstruirEscenaMenu();
 
             EditorBuildSettings.scenes = new[]
             {
                 new EditorBuildSettingsScene(EscenaMenu, true),
                 new EditorBuildSettingsScene(EscenaCenote, true),
+                new EditorBuildSettingsScene(EscenaAR, true),
             };
             AssetDatabase.SaveAssets();
             EditorSceneManager.OpenScene(EscenaMenu);
-            Debug.Log("[Cenote Vivo] Escenas listas: MenuInicio (índice 0) y CenoteVivo (índice 1). Pulsa Play para probar.");
+            Debug.Log("[Cenote Vivo] Escenas listas: MenuInicio (0), CenoteVivo (1) y CenoteAR (2). Pulsa Play para probar.");
         }
 
         [MenuItem("Cenote Vivo/2. Configurar proyecto para Android", priority = 2)]
-        static void ConfigurarAndroid()
+        internal static void ConfigurarAndroid()
         {
             var android = NamedBuildTarget.Android;
             PlayerSettings.SetScriptingBackend(android, ScriptingImplementation.IL2CPP);
@@ -63,25 +67,32 @@ namespace CenoteVivo.EditorTools
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;
             PlayerSettings.allowedAutorotateToLandscapeRight = true;
-            PlayerSettings.productName = "Cenote Vivo";
-            PlayerSettings.SetApplicationIdentifier(android, "com.cenotevivo.app");
-            Debug.Log("[Cenote Vivo] Android: IL2CPP + ARM64, orientación horizontal, id com.cenotevivo.app. " +
+            // Versión AR: otro id para poder instalarla junto a la app original.
+            PlayerSettings.productName = "Cenote Vivo AR";
+            PlayerSettings.SetApplicationIdentifier(android, "com.cenotevivo.ar");
+            // Vuforia Engine 11 exige Android 10 (API 29) como mínimo. Desde Android 10 las fotos se guardan
+            // en la galería con MediaStore, sin pedir permiso de almacenamiento.
+            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel29;
+            PlayerSettings.Android.forceSDCardPermission = false;
+            Debug.Log("[Cenote Vivo] Android: IL2CPP + ARM64, orientación horizontal, id com.cenotevivo.ar. " +
                       "Cambia la plataforma en File > Build Profiles > Android.");
         }
 
         // ───────────────────────────── Escena 3D ─────────────────────────────
 
-        static bool ConstruirEscenaCenote()
+        static bool ConstruirEscenaCenote(string rutaEscena, bool ar)
         {
-            if (!File.Exists(EscenaCenote))
+            // La escena AR reorganiza la jerarquía (todo cuelga de la miniatura): se rehace siempre desde cero.
+            if (ar && File.Exists(rutaEscena)) AssetDatabase.DeleteAsset(rutaEscena);
+            if (!File.Exists(rutaEscena))
             {
-                if (!AssetDatabase.CopyAsset(EscenaOrigen, EscenaCenote))
+                if (!AssetDatabase.CopyAsset(EscenaOrigen, rutaEscena))
                 {
                     Debug.LogError($"[Cenote Vivo] No se pudo copiar {EscenaOrigen}.");
                     return false;
                 }
             }
-            var escena = EditorSceneManager.OpenScene(EscenaCenote, OpenSceneMode.Single);
+            var escena = EditorSceneManager.OpenScene(rutaEscena, OpenSceneMode.Single);
             foreach (var go in escena.GetRootGameObjects())
                 if (ObjetosGenerados.Contains(go.name)) Object.DestroyImmediate(go);
 
@@ -137,8 +148,14 @@ namespace CenoteVivo.EditorTools
             Fijar(diaNoche, "luna", luna);
 
             // ── Entorno: selva, vegetación del cenote, faroles nocturnos ──
-            SelvaGenerador.Limpiar();
-            var selva = SelvaGenerador.Generar(modelo, limites, limitesAgua, nivelAgua, diaNoche);
+            SelvaGenerador.Resultado selva;
+            SelvaGenerador.ModoAR = ar;
+            try
+            {
+                SelvaGenerador.Limpiar();
+                selva = SelvaGenerador.Generar(modelo, limites, limitesAgua, nivelAgua, diaNoche);
+            }
+            finally { SelvaGenerador.ModoAR = false; }
             if (materiales.TryGetValue("Roca_Calcarea", out var roca)) roca.SetFloat("_Musgo", 0.85f);
             if (materiales.TryGetValue("Piedras", out var piedras)) piedras.SetFloat("_Musgo", 0.35f);
 
@@ -166,6 +183,35 @@ namespace CenoteVivo.EditorTools
             camara.nearClipPlane = Mathf.Max(0.05f, tam * 0.001f);
             camara.farClipPlane = Mathf.Max(tam * 4f, radio * 12f);
             camara.clearFlags = CameraClearFlags.Skybox;
+
+            if (ar)
+            {
+                var corteAR = sistemas.AddComponent<CorteTransversal>();
+                so = new SerializedObject(corteAR);
+                so.FindProperty("normal").vector3Value = Vector3.back;
+                so.FindProperty("puntoDelPlano").vector3Value = limites.center;
+                so.FindProperty("alturaSuperficie").floatValue = selva.alturaSuelo;
+                so.FindProperty("profundidad").floatValue = limites.size.y;
+                so.FindProperty("nivelAgua").floatValue = nivelAgua;
+                so.ApplyModifiedPropertiesWithoutUndo();
+
+                CenoteVivoARBuilder.Montar(new CenoteVivoARBuilder.Datos
+                {
+                    modelo = modelo, sistemas = sistemas, camaraOriginal = camara, sol = sol, luna = luna,
+                    diaNoche = diaNoche, contaminacion = contaminacion, corte = corteAR,
+                    limites = limites, limitesAgua = limitesAgua, nivelAgua = nivelAgua,
+                    radioAgua = radioAgua, alturaSuelo = selva.alturaSuelo,
+                });
+                EditorSceneManager.MarkSceneDirty(escena);
+                EditorSceneManager.SaveScene(escena);
+                return true;
+            }
+
+            // Optimización: la vegetación pequeña deja de dibujarse a partir de 3.4 R de la cámara.
+            var culling = camara.GetComponent<CullingPorDistancia>();
+            if (culling == null) culling = camara.gameObject.AddComponent<CullingPorDistancia>();
+            Fijar(culling, "capa", SelvaGenerador.CapaDetalle);
+            Fijar(culling, "distancia", radio * 3.4f);
 
             var vistas = CrearVistas(limites, limitesAgua, nivelAgua, radio);
 
@@ -389,6 +435,8 @@ namespace CenoteVivo.EditorTools
                 foreach (var r in t.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = ShadowCastingMode.Off;
         }
 
+        const float DistanciaSombras = 40f;
+
         static void ActivarOpaqueTexture()
         {
             // La refracción del agua lee _CameraOpaqueTexture. Se activa con submuestreo 2x (barato).
@@ -406,6 +454,10 @@ namespace CenoteVivo.EditorTools
                 var down = so.FindProperty("m_OpaqueDownsampling");
                 if (opaque != null) opaque.boolValue = true;
                 if (down != null) down.intValue = 1; // _2xBilinear
+                // Optimización de sombras: el mapa de sombras solo cubre 40 m (antes 50). Más allá ya no
+                // se vuelven a dibujar los objetos en el mapa de sombras.
+                var sombras = so.FindProperty("m_ShadowDistance");
+                if (sombras != null) sombras.floatValue = DistanciaSombras;
                 so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(a);
             }
@@ -721,7 +773,7 @@ namespace CenoteVivo.EditorTools
         }
 
         // Ancla un elemento a la parte superior de su padre con márgenes (izq, der, arriba) y altura fija.
-        static void Arriba(RectTransform rt, float izq, float der, float arriba, float alto)
+        internal static void Arriba(RectTransform rt, float izq, float der, float arriba, float alto)
         {
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(1f, 1f);
@@ -775,7 +827,9 @@ namespace CenoteVivo.EditorTools
             Estirar(frase.rectTransform);
 
             var explorar = Boton("Boton Explorar", columna, "Explorar el cenote", Acento, TextoOscuro, 36, out _);
-            Anclar((RectTransform)explorar.transform, new Vector2(0.5f, 1f), new Vector2(0f, -540f), new Vector2(560f, 110f));
+            Anclar((RectTransform)explorar.transform, new Vector2(0.5f, 1f), new Vector2(-300f, -540f), new Vector2(560f, 110f));
+            var botonAR = Boton("Boton AR", columna, "Ver en tu mesa (AR)", new Color(0.86f, 0.5f, 0.18f), TextoOscuro, 36, out _);
+            Anclar((RectTransform)botonAR.transform, new Vector2(0.5f, 1f), new Vector2(300f, -540f), new Vector2(560f, 110f));
             var acerca = Boton("Boton Acerca", columna, "¿Por qué importa?", FondoPanel, TextoClaro, 32, out _);
             Anclar((RectTransform)acerca.transform, new Vector2(0.5f, 1f), new Vector2(0f, -670f), new Vector2(560f, 96f));
             var salir = Boton("Boton Salir", columna, "Salir", new Color(1f, 1f, 1f, 0f), TextoSecundario, 28, out _);
@@ -790,6 +844,7 @@ namespace CenoteVivo.EditorTools
             Fijar(menu, "frase", frase);
             Fijar(menu, "grupoFrase", grupo);
             Fijar(menu, "botonExplorar", explorar);
+            Fijar(menu, "botonAR", botonAR);
             Fijar(menu, "botonAcerca", acerca);
             Fijar(menu, "botonSalir", salir);
             Fijar(menu, "panelAcerca", modal);
@@ -802,7 +857,7 @@ namespace CenoteVivo.EditorTools
 
         // ───────────────────────────── Utilidades ─────────────────────────────
 
-        static void Fijar(Object destino, string campo, Object valor)
+        internal static void Fijar(Object destino, string campo, Object valor)
         {
             var so = new SerializedObject(destino);
             var p = so.FindProperty(campo);
@@ -811,14 +866,21 @@ namespace CenoteVivo.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        static void Fijar(Object destino, string campo, float valor)
+        internal static void Fijar(Object destino, string campo, float valor)
         {
             var so = new SerializedObject(destino);
             so.FindProperty(campo).floatValue = valor;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        static void Fijar(Object destino, string campo, bool valor)
+        internal static void Fijar(Object destino, string campo, string valor)
+        {
+            var so = new SerializedObject(destino);
+            so.FindProperty(campo).stringValue = valor;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        internal static void Fijar(Object destino, string campo, bool valor)
         {
             var so = new SerializedObject(destino);
             so.FindProperty(campo).boolValue = valor;

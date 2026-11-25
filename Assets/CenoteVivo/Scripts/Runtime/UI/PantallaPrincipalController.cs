@@ -17,6 +17,8 @@ namespace CenoteVivo.UI
         [SerializeField] DayNightController diaNoche;
         [SerializeField] CameraViewController camaras;
         [SerializeField] string escenaMenu = "MenuInicio";
+        [Tooltip("Desactivado en la escena AR: ahí el botón Atrás lo maneja PantallaARController.")]
+        [SerializeField] bool manejarBotonAtras = true;
 
         [Header("Banner guía")]
         [SerializeField] Text textoBanner;
@@ -94,6 +96,7 @@ namespace CenoteVivo.UI
 
         void Update()
         {
+            if (!manejarBotonAtras) return;
             var teclado = Keyboard.current;
             if (teclado == null || !teclado.escapeKey.wasPressedThisFrame) return;
             if (panelInfo != null && panelInfo.Visible) panelInfo.Ocultar();

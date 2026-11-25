@@ -23,7 +23,7 @@ void AguaRefraccion_float(float3 PosWS, float3 NormalWS, float4 PosPantalla, out
 {
     half p = saturate(_CenotePollution);
     // El agua contaminada es más pesada/espesa: las ondas se calman.
-    half3 n = NormalOndas(PosWS.xz, normalize(NormalWS), lerp(1.0h, 0.35h, p));
+    half3 n = NormalOndas(ACenote(PosWS).xz, normalize(NormalWS), lerp(1.0h, 0.35h, p));
     Normal = n;
     float2 uv = PosPantalla.xy + n.xz * _Refraccion * (1.0 - p);
     UVEscena = float4(uv, 0, 1);
@@ -33,7 +33,8 @@ void AguaRefraccion_float(float3 PosWS, float3 NormalWS, float4 PosPantalla, out
 void AguaSuperficie_float(float3 PosWS, float3 Normal, float3 ColorEscena,
     out float3 BaseColor, out float Suavidad, out float3 Emision, out float Alfa, out float Umbral)
 {
-    Umbral = UmbralCorte(PosWS);
+    float3 pc = ACenote(PosWS); // espacio del cenote (igual al mundo fuera de AR)
+    Umbral = UmbralCorte(pc);
     half p = saturate(_CenotePollution);
     half3 v = normalize(_WorldSpaceCameraPos - PosWS);
     half nv = saturate(dot(Normal, v));
@@ -41,8 +42,8 @@ void AguaSuperficie_float(float3 PosWS, float3 Normal, float3 ColorEscena,
 
     // Más profundo al mirar perpendicular (se ve más columna de agua).
     half4 limpio = lerp(_ColorProfundo, _ColorSuperficie, fresnel);
-    float manchas = ValueNoise(PosWS.xz * _EscalaTurbidez + _Time.y * 0.03);
-    manchas = manchas * 0.6 + ValueNoise(PosWS.xz * _EscalaTurbidez * 3.1 - _Time.y * 0.05) * 0.4;
+    float manchas = ValueNoise(pc.xz * _EscalaTurbidez + _Time.y * 0.03);
+    manchas = manchas * 0.6 + ValueNoise(pc.xz * _EscalaTurbidez * 3.1 - _Time.y * 0.05) * 0.4;
     half4 sucio = lerp(_ColorContaminado, _ColorTurbio, smoothstep(0.35, 0.75, manchas));
     half4 cuerpo = lerp(limpio, sucio, smoothstep(0.0, 1.0, p));
     half opacidad = cuerpo.a;

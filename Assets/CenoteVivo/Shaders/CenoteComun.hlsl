@@ -1,4 +1,4 @@
-#ifndef CENOTE_COMUN_INCLUDED
+﻿#ifndef CENOTE_COMUN_INCLUDED
 #define CENOTE_COMUN_INCLUDED
 
 // ── Variables globales (Shader.SetGlobal*) ──
@@ -11,6 +11,33 @@ float _CenoteCorteActivo;
 float _CenoteAlturaSuperficie;
 float _CenoteProfundidad;
 float _CenoteNivelAgua;
+
+// ── Realidad aumentada ──
+// En AR el cenote es una miniatura que el usuario mueve, gira y escala. Los datos de arriba
+// (plano de corte, alturas, nivel del agua) están en el "espacio del cenote" (el mundo original
+// de la escena 3D). EspacioCenoteAR publica la matriz mundo → cenote y activa _CenoteEspacioAR.
+// Fuera de AR vale 0 y las posiciones se usan tal cual (la escena 3D no cambia).
+float _CenoteEspacioAR;
+float4x4 _CenoteMundoALocal;
+float4x4 _CenoteLocalAMundo;
+
+// Posición de mundo → espacio del cenote.
+float3 ACenote(float3 posWS)
+{
+    return _CenoteEspacioAR > 0.5 ? mul(_CenoteMundoALocal, float4(posWS, 1.0)).xyz : posWS;
+}
+
+// Posición del espacio del cenote → mundo.
+float3 DeCenote(float3 posCenote)
+{
+    return _CenoteEspacioAR > 0.5 ? mul(_CenoteLocalAMundo, float4(posCenote, 1.0)).xyz : posCenote;
+}
+
+// Dirección del espacio del cenote → mundo (para devolver normales al Lit Shader Graph).
+float3 DireccionAMundo(float3 dirLocal)
+{
+    return _CenoteEspacioAR > 0.5 ? normalize(mul((float3x3)_CenoteLocalAMundo, dirLocal)) : dirLocal;
+}
 
 float Hash21(float2 p)
 {
@@ -41,14 +68,15 @@ float Fbm3(float2 p)
 void AplicarCorte(float3 posWS)
 {
     if (_CenoteCorteActivo > 0.5)
-        clip(_CenotePlanoCorte.w - dot(posWS, _CenotePlanoCorte.xyz));
+        clip(_CenotePlanoCorte.w - dot(ACenote(posWS), _CenotePlanoCorte.xyz));
 }
 
 // Para una cara interior vista a través del corte: punto donde el rayo de la cámara cruza el plano.
 // Así la sección se dibuja plana, como un corte real, y no según la cara trasera (más lejana).
+// pw ya está en el espacio del cenote; la cámara se lleva al mismo espacio.
 float3 PuntoEnCorte(float3 pw)
 {
-    float3 cam = _WorldSpaceCameraPos; // disponible también en las vistas previas de Shader Graph
+    float3 cam = ACenote(_WorldSpaceCameraPos); // disponible también en las vistas previas de Shader Graph
     float3 dir = normalize(pw - cam);
     float den = dot(_CenotePlanoCorte.xyz, dir);
     float t = (_CenotePlanoCorte.w - dot(_CenotePlanoCorte.xyz, cam)) / (abs(den) > 1e-4 ? den : 1e-4);

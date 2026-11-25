@@ -51,9 +51,28 @@ namespace CenoteVivo
             }
 
             Activo = activo;
+            PublicarPlano();
+            Shader.SetGlobalFloat(ActivoId, activo ? 1f : 0f);
+        }
+
+        /// <summary>Punto por el que pasa el plano (espacio del cenote).</summary>
+        public Vector3 PuntoDelPlano => puntoDelPlano;
+
+        /// <summary>
+        /// Cambia la orientación del plano (espacio del cenote). En AR se llama cada cuadro para que
+        /// el corte quede siempre de frente al usuario, camine por donde camine alrededor de la mesa.
+        /// </summary>
+        public void FijarNormal(Vector3 nuevaNormal)
+        {
+            if (nuevaNormal.sqrMagnitude < 1e-6f) return;
+            normal = nuevaNormal.normalized;
+            PublicarPlano();
+        }
+
+        void PublicarPlano()
+        {
             var n = normal.normalized;
             Shader.SetGlobalVector(PlanoId, new Vector4(n.x, n.y, n.z, Vector3.Dot(n, puntoDelPlano)));
-            Shader.SetGlobalFloat(ActivoId, activo ? 1f : 0f);
         }
     }
 }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -16,7 +16,16 @@ namespace CenoteVivo.EditorTools
     /// </summary>
     static class SelvaGenerador
     {
-        const string CarpetaMallas = "Assets/CenoteVivo/Generado/Selva";
+        /// <summary>
+        /// Modo realidad aumentada: el cenote es una miniatura sobre la mesa, así que se genera un diorama
+        /// ligero para teléfonos de gama baja: terreno de 1.7 R (no 7.2 R), sin selva lejana ni árboles
+        /// distantes. Sus mallas van a otra carpeta para no pisar las de la escena 3D.
+        /// </summary>
+        public static bool ModoAR;
+        public const float RadioAR = 1.7f;
+        /// <summary>Altura de la base del terreno generado (la miniatura AR se apoya ahí, sobre la mesa).</summary>
+        public static float FondoTerreno;
+        static string CarpetaMallas => ModoAR ? "Assets/CenoteVivo/Generado/SelvaAR" : "Assets/CenoteVivo/Generado/Selva";
         const string CarpetaMateriales = "Assets/CenoteVivo/Materials";
 
         public struct Resultado
@@ -138,7 +147,7 @@ namespace CenoteVivo.EditorTools
                 Helechos();
                 Pasto();
                 LianasYRaices();
-                SelvaLejana();
+                if (!ModoAR) SelvaLejana();
                 CrearObjetos(raiz, materialVeg);
                 Noche(diaNoche);
 
@@ -221,6 +230,7 @@ namespace CenoteVivo.EditorTools
         {
             p = new Vector3(x, 0f, z);
             float r = Vector2.Distance(new Vector2(x, z), new Vector2(centro.x, centro.z));
+            if (ModoAR && r > R * (RadioAR - 0.12f)) return false; // fuera del diorama
             if (r < R * 0.97f)
             {
                 var desdePozo = p - centroPozo; desdePozo.y = 0f;
@@ -251,6 +261,9 @@ namespace CenoteVivo.EditorTools
             return ang < 32f && d.magnitude < 2.7f * R;
         }
 
+        // Radio máximo de la vegetación pequeña (arbustos, helechos, pasto).
+        static float RadioDetalle => 2.2f * R;
+
         static Vector3 PuntoAnillo(float rMin, float rMax)
         {
             float a = Rand() * Mathf.PI * 2f;
@@ -258,13 +271,27 @@ namespace CenoteVivo.EditorTools
             return centro + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * r;
         }
 
+        /// <summary>Capa de la vegetación pequeña; la cámara deja de dibujarla a partir de cierta distancia.</summary>
+        public const string CapaDetalle = "VegetacionDetalle";
+        /// <summary>Solo los árboles dentro de este radio (× R) proyectan sombra.</summary>
+        public const float FactorRadioSombras = 1.8f;
+
+        // Optimización de draw calls: la selva se agrupa en 4 cuadrantes (antes 8 sectores × 3 anillos)
+        // y la selva lejana va en una sola malla. Cada grupo es una sola llamada de dibujo.
         static Malla Bloque(string categoria, Vector3 p)
         {
             var d = p - centro; d.y = 0f;
-            float ang = Mathf.Atan2(d.z, d.x) * Mathf.Rad2Deg + 360f;
-            int sector = Mathf.FloorToInt(ang / 45f) % 8;
-            string anillo = d.magnitude < R ? "Cenote" : d.magnitude < 3f * R ? "Cerca" : "Lejos";
-            string clave = $"{categoria}_{anillo}_{sector}";
+            string clave;
+            if (categoria == "Lejanos") clave = "Lejanos";
+            else
+            {
+                float ang = Mathf.Atan2(d.z, d.x) * Mathf.Rad2Deg + 360f;
+                int cuadrante = Mathf.FloorToInt(ang / 90f) % 4;
+                string zona = categoria == "Arboles"
+                    ? (d.magnitude < FactorRadioSombras * R ? "Sombra" : "SinSombra")
+                    : (d.magnitude < R ? "Cenote" : "Claro");
+                clave = $"{categoria}_{zona}_{cuadrante}";
+            }
             if (!bloques.TryGetValue(clave, out var m)) bloques[clave] = m = new Malla();
             return m;
         }
@@ -274,8 +301,8 @@ namespace CenoteVivo.EditorTools
         static void Terreno(Transform raiz, Material material, Bounds limites)
         {
             var m = new Malla();
-            const int anillos = 30, segmentos = 96;
-            float rIn = R * 0.985f, rOut = R * 7.2f;
+            int anillos = ModoAR ? 12 : 30, segmentos = ModoAR ? 64 : 96;
+            float rIn = R * 0.985f, rOut = R * (ModoAR ? RadioAR : 7.2f);
             var radios = new float[anillos + 1];
             for (int i = 0; i <= anillos; i++) radios[i] = rIn + (rOut - rIn) * Mathf.Pow(i / (float)anillos, 1.6f);
 
@@ -307,7 +334,9 @@ namespace CenoteVivo.EditorTools
             // Cierre del volumen (pared exterior y fondo) para que el corte transversal muestre tierra sólida.
             // Sin pared interior: dentro del anillo está el bloque del cenote, y así el corte se ve continuo.
             var tierra = new Color32(120, 98, 70, 0);
-            float fondo = SelvaGenerador.fondo - R * 1.5f;
+            // En AR el bloque termina poco debajo del cenote: es una maqueta que se apoya en la mesa.
+            float fondo = SelvaGenerador.fondo - R * (ModoAR ? 0.08f : 1.5f);
+            FondoTerreno = fondo;
             for (int j = 0; j < segmentos; j++)
             {
                 float a0 = j / (float)segmentos * Mathf.PI * 2f, a1 = (j + 1) / (float)segmentos * Mathf.PI * 2f;
@@ -551,14 +580,15 @@ namespace CenoteVivo.EditorTools
         static void Arboles()
         {
             int colocados = 0;
-            for (int intento = 0; intento < 5000 && colocados < 175; intento++)
+            for (int intento = 0; intento < 5000 && colocados < (ModoAR ? 18 : 140); intento++)
             {
                 var p = PuntoAnillo(1.2f * R, 5.6f * R);
                 if (EnVisual(p) || !Apoyo(p.x, p.z, 0f, out var b)) continue;
                 float r = Vector3.Distance(new Vector3(p.x, 0, p.z), centro);
                 float h = R * Rango(0.3f, 0.45f) * Mathf.Lerp(1f, 1.25f, Mathf.InverseLerp(2f * R, 5f * R, r));
                 if (!Libre(b, h * 0.22f)) continue;
-                Arbol(b, h, r < 3.2f * R);
+                // Copa detallada (80 triángulos por masa) solo cerca; lejos, 20 triángulos por masa.
+                Arbol(b, h, r < 2f * R);
                 colocados++;
             }
         }
@@ -566,7 +596,7 @@ namespace CenoteVivo.EditorTools
         static void Palmas()
         {
             int colocados = 0;
-            for (int intento = 0; intento < 2000 && colocados < 45; intento++)
+            for (int intento = 0; intento < 2000 && colocados < (ModoAR ? 8 : 45); intento++)
             {
                 var p = PuntoAnillo(1.15f * R, 4f * R);
                 float h = R * Rango(0.25f, 0.4f);
@@ -596,10 +626,10 @@ namespace CenoteVivo.EditorTools
                 var off = new Vector3(Rango(-0.6f, 0.6f), Rango(0.2f, 0.5f), Rango(-0.6f, 0.6f)) * s;
                 Copa(m, b + off, new Vector3(Rango(0.8f, 1.1f), Rango(0.6f, 0.8f), Rango(0.8f, 1.1f)) * s, Var(color, 0.1f), 0f, 0.5f, false, Rand() * 100f);
             }
-            if (Rand() < 0.35f)
+            if (Rand() < 0.25f)
             {
                 var flor = Elegir(Flores);
-                for (int k = 0; k < rng.Next(3, 7); k++)
+                for (int k = 0; k < rng.Next(3, 5); k++)
                 {
                     var d = new Vector3(Rango(-1f, 1f), Rango(0.3f, 1f), Rango(-1f, 1f)).normalized;
                     Copa(m, b + Vector3.up * s * 0.45f + d * s * 0.85f, Vector3.one * s * 0.14f, flor, 0.4f, 0.5f, false, Rand() * 100f);
@@ -609,14 +639,15 @@ namespace CenoteVivo.EditorTools
 
         static void Arbustos()
         {
-            for (int k = 0, puestos = 0; k < 3000 && puestos < 220; k++)
+            // La vegetación pequeña solo se genera hasta 2.2 R: más lejos la cubren la niebla y los árboles.
+            for (int k = 0, puestos = 0; k < 3000 && puestos < 70; k++)
             {
-                var p = PuntoAnillo(1.05f * R, 5f * R);
+                var p = PuntoAnillo(1.05f * R, RadioDetalle);
                 float s = R * Rango(0.025f, 0.06f);
                 if (!Apoyo(p.x, p.z, 0f, out var b) || !Libre(b, s * 0.5f)) continue;
                 Arbusto(b, s); puestos++;
             }
-            for (int k = 0, puestos = 0; k < 2500 && puestos < 70; k++)
+            for (int k = 0, puestos = 0; k < 2500 && puestos < 50; k++)
             {
                 var p = PuntoAnillo(0.2f * R, 0.96f * R);
                 float s = R * Rango(0.02f, 0.045f);
@@ -624,9 +655,9 @@ namespace CenoteVivo.EditorTools
                 Arbusto(b, s); puestos++;
             }
             // Franja de arbustos sobre la unión entre el bloque del cenote y el terreno.
-            for (int k = 0; k < 170; k++)
+            for (int k = 0; k < 110; k++)
             {
-                var p = centro + Dir(k / 170f * 360f + Rango(-1f, 1f)) * R * Rango(0.96f, 1.06f);
+                var p = centro + Dir(k / 110f * 360f + Rango(-1.5f, 1.5f)) * R * Rango(0.96f, 1.06f);
                 if (!Apoyo(p.x, p.z, R * 0.03f, out var b)) continue;
                 Arbusto(b, R * Rango(0.025f, 0.05f));
             }
@@ -635,26 +666,26 @@ namespace CenoteVivo.EditorTools
         static void Helecho(Vector3 b, float s, Vector3? inclinarHacia = null)
         {
             var m = Bloque("Sotobosque", b);
-            int frondas = rng.Next(5, 8);
+            int frondas = rng.Next(4, 6);
             var color = Var(Elegir(Pastos), 0.1f);
             for (int k = 0; k < frondas; k++)
             {
                 var d = Dir((k + Rand() * 0.6f) / frondas * 360f);
                 if (inclinarHacia.HasValue) d = (d + inclinarHacia.Value * 1.2f).normalized;
                 float largo = s * Rango(0.8f, 1.2f);
-                Fronda(m, b, d, largo, largo * 0.13f, largo * 0.45f, largo * 0.5f, 3, color, 0f, 0.9f);
+                Fronda(m, b, d, largo, largo * 0.13f, largo * 0.45f, largo * 0.5f, 2, color, 0f, 0.9f);
             }
         }
 
         static void Helechos()
         {
-            for (int k = 0, puestos = 0; k < 2000 && puestos < 150; k++)
+            for (int k = 0, puestos = 0; k < 2000 && puestos < 90; k++)
             {
-                var p = PuntoAnillo(1.0f * R, 2.6f * R);
+                var p = PuntoAnillo(1.0f * R, RadioDetalle);
                 if (!Apoyo(p.x, p.z, 0f, out var b)) continue;
                 Helecho(b, R * Rango(0.03f, 0.06f)); puestos++;
             }
-            for (int k = 0, puestos = 0; k < 2500 && puestos < 110; k++)
+            for (int k = 0, puestos = 0; k < 2500 && puestos < 70; k++)
             {
                 var p = PuntoAnillo(0.2f * R, 0.96f * R);
                 if (!Apoyo(p.x, p.z, R * 0.01f, out var b)) continue;
@@ -674,7 +705,7 @@ namespace CenoteVivo.EditorTools
         static void Mata(Malla m, Vector3 b, float s)
         {
             var color = Elegir(Pastos);
-            int hojas = rng.Next(3, 5);
+            int hojas = rng.Next(2, 4);
             for (int k = 0; k < hojas; k++)
             {
                 var d = Dir(Rand() * 360f);
@@ -688,13 +719,13 @@ namespace CenoteVivo.EditorTools
 
         static void Pasto()
         {
-            for (int k = 0, puestos = 0; k < 6000 && puestos < 1400; k++)
+            for (int k = 0, puestos = 0; k < 6000 && puestos < (ModoAR ? 300 : 800); k++)
             {
                 var p = PuntoAnillo(1.0f * R, 2.0f * R);
                 if (!Apoyo(p.x, p.z, 0f, out var b)) continue;
                 Mata(Bloque("Sotobosque", b), b, R * Rango(0.012f, 0.03f)); puestos++;
             }
-            for (int k = 0, puestos = 0; k < 5000 && puestos < 800; k++)
+            for (int k = 0, puestos = 0; k < 5000 && puestos < (ModoAR ? 150 : 450); k++)
             {
                 var p = PuntoAnillo(0.2f * R, 1.04f * R);
                 if (!Apoyo(p.x, p.z, R * 0.005f, out var b)) continue;
@@ -883,6 +914,7 @@ namespace CenoteVivo.EditorTools
 
         static void CrearObjetos(Transform raiz, Material material)
         {
+            int capaDetalle = AsegurarCapa(CapaDetalle);
             foreach (var kv in bloques.OrderBy(k => k.Key))
             {
                 if (kv.Value.v.Count == 0) continue;
@@ -891,13 +923,35 @@ namespace CenoteVivo.EditorTools
                 go.AddComponent<MeshFilter>().sharedMesh = Guardar(kv.Value.Construir(kv.Key));
                 var mr = go.AddComponent<MeshRenderer>();
                 mr.sharedMaterial = material;
-                bool sombras = kv.Key.StartsWith("Arboles");
+                // Solo los árboles cercanos al cenote proyectan sombra (antes: todos los árboles).
+                bool sombras = kv.Key.StartsWith("Arboles_Sombra");
                 mr.shadowCastingMode = sombras ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                // La vegetación pequeña va en su propia capa para recortarla por distancia (CullingPorDistancia).
+                if (kv.Key.StartsWith("Sotobosque") && capaDetalle > 0) go.layer = capaDetalle;
                 mr.receiveShadows = !kv.Key.StartsWith("Lejanos");
                 mr.lightProbeUsage = LightProbeUsage.Off;
                 mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
                 Estatico(go, batching: false);
             }
+        }
+
+        /// <summary>Devuelve la capa con ese nombre; si no existe, la crea en la primera capa de usuario libre.</summary>
+        public static int AsegurarCapa(string nombre)
+        {
+            var tagManager = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+            var capas = tagManager.FindProperty("layers");
+            for (int i = 0; i < capas.arraySize; i++)
+                if (capas.GetArrayElementAtIndex(i).stringValue == nombre) return i;
+            for (int i = 8; i < capas.arraySize; i++)
+            {
+                var c = capas.GetArrayElementAtIndex(i);
+                if (!string.IsNullOrEmpty(c.stringValue)) continue;
+                c.stringValue = nombre;
+                tagManager.ApplyModifiedPropertiesWithoutUndo();
+                return i;
+            }
+            Debug.LogWarning($"[Cenote Vivo] No hay capas libres para '{nombre}'.");
+            return 0;
         }
 
         static void Estatico(GameObject go, bool batching = true)
@@ -911,7 +965,7 @@ namespace CenoteVivo.EditorTools
         static Mesh Guardar(Mesh malla)
         {
             if (!AssetDatabase.IsValidFolder("Assets/CenoteVivo/Generado")) AssetDatabase.CreateFolder("Assets/CenoteVivo", "Generado");
-            if (!AssetDatabase.IsValidFolder(CarpetaMallas)) AssetDatabase.CreateFolder("Assets/CenoteVivo/Generado", "Selva");
+            if (!AssetDatabase.IsValidFolder(CarpetaMallas)) AssetDatabase.CreateFolder("Assets/CenoteVivo/Generado", ModoAR ? "SelvaAR" : "Selva");
             string ruta = $"{CarpetaMallas}/{malla.name}.asset";
             AssetDatabase.DeleteAsset(ruta);
             AssetDatabase.CreateAsset(malla, ruta);

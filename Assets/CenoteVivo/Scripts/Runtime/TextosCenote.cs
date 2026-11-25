@@ -1,4 +1,4 @@
-namespace CenoteVivo
+﻿namespace CenoteVivo
 {
     /// <summary>
     /// Todos los textos de la app en un solo lugar para facilitar su edición o traducción.
@@ -65,6 +65,25 @@ namespace CenoteVivo
             "Vista general: así se ve el cenote desde la superficie.",
             "Nivel del agua: observa la transparencia y el color del agua.",
             "Corte del subsuelo: mira cómo la contaminación se infiltra a través de la roca.",
+        };
+
+        // Etiquetas de la escena AR: (título, explicación corta de la tarjeta).
+        public static readonly (string titulo, string texto)[] EtiquetasAR =
+        {
+            ("Roca caliza",
+             "Yucatán está hecho de roca caliza, porosa como una esponja. La lluvia se filtra por sus grietas " +
+             "hasta el agua subterránea… y la contaminación también pasa casi sin filtrarse. " +
+             "Toca «Ver subsuelo» para ver las capas de roca."),
+            ("Agua subterránea",
+             "El agua del cenote es parte de un gran río bajo la tierra: el Gran Acuífero Maya. " +
+             "Es la única fuente de agua potable de Mérida y de todo Yucatán. Lo que la ensucia aquí, " +
+             "llega a los pozos de los que bebemos."),
+            ("Raíces",
+             "Las raíces del álamo bajan por las paredes hasta alcanzar el agua. Junto con helechos, lianas y musgos, " +
+             "forman la vida verde del cenote. Cuando el agua se contamina, esta vegetación se marchita."),
+            ("Contaminación",
+             "Fosas sépticas, granjas de cerdos, basureros y agroquímicos se infiltran por la roca y llegan " +
+             "al cenote en horas, no en años. Mueve el control de contaminación y mira cómo el agua se enturbia."),
         };
     }
 }

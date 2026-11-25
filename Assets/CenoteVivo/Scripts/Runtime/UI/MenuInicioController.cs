@@ -12,12 +12,14 @@ namespace CenoteVivo.UI
     public class MenuInicioController : MonoBehaviour
     {
         [SerializeField] string escenaCenote = "CenoteVivo";
+        [SerializeField] string escenaAR = "CenoteAR";
         [SerializeField] Text titulo;
         [SerializeField] Text subtitulo;
         [SerializeField] Text frase;
         [SerializeField] CanvasGroup grupoFrase;
         [SerializeField] float segundosPorFrase = 5f;
         [SerializeField] Button botonExplorar;
+        [SerializeField] Button botonAR;
         [SerializeField] Button botonAcerca;
         [SerializeField] Button botonSalir;
         [SerializeField] PanelDesvanecible panelAcerca;
@@ -39,6 +41,7 @@ namespace CenoteVivo.UI
             }
 
             botonExplorar?.onClick.AddListener(Explorar);
+            botonAR?.onClick.AddListener(ExplorarAR);
             botonAcerca?.onClick.AddListener(() => panelAcerca?.Mostrar());
             botonCerrarAcerca?.onClick.AddListener(() => panelAcerca?.Ocultar());
             botonSalir?.onClick.AddListener(Application.Quit);
@@ -56,6 +59,9 @@ namespace CenoteVivo.UI
         }
 
         public void Explorar() => SceneManager.LoadSceneAsync(escenaCenote);
+
+        /// <summary>Abre la escena de realidad aumentada (el cenote sobre la mesa).</summary>
+        public void ExplorarAR() => SceneManager.LoadSceneAsync(escenaAR);
 
         IEnumerator RotarFrases()
         {

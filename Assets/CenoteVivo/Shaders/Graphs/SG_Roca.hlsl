@@ -7,7 +7,7 @@
 void RocaSuperficie_float(float3 PosWS, float3 NormalWS, bool EsFrente,
     out float3 BaseColor, out float3 Normal, out float Suavidad, out float3 Emision, out float Umbral)
 {
-    float3 pw = PosWS;
+    float3 pw = ACenote(PosWS); // espacio del cenote (igual al mundo fuera de AR)
     Umbral = UmbralCorte(pw);
     half p = saturate(_CenotePollution);
     half variacion = Fbm3(pw.xz * _EscalaVariacion + pw.y * _EscalaVariacion * 0.7);
@@ -22,7 +22,7 @@ void RocaSuperficie_float(float3 PosWS, float3 NormalWS, bool EsFrente,
         half pluma;
         albedo = SeccionInterior(pw, p, variacion, _ColorEstratoA.rgb, _ColorEstratoB.rgb, _ColorPluma.rgb, pluma);
         humedad = lerp(humedad, 0.6h, pluma);
-        n = _CenotePlanoCorte.xyz;
+        n = DireccionAMundo(_CenotePlanoCorte.xyz);
         Emision = albedo * 0.25; // la sección se lee también de noche
     }
     else

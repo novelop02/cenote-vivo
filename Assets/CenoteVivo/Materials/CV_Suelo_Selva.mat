@@ -63,6 +63,7 @@ Material:
     - _Translucidez: 0.35
     - _VelocidadViento: 1.2
     - _Viento: 0
+    - _XRMotionVectorsPass: 1
     m_Colors:
     - _ColorEstratoA: {r: 0.54999995, g: 0.45, b: 0.31999996, a: 1}
     - _ColorEstratoB: {r: 0.72, g: 0.68, b: 0.58, a: 1}

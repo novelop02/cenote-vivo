@@ -3,6 +3,39 @@
 App Android en Unity 6.6 (URP) para concientizar sobre la contaminación del agua subterránea y del subsuelo en los cenotes.
 El modelo base es `Assets/Components/cenote-prueba-7.fbx` y se conserva tal cual. Todo lo nuevo se le agrega encima con materiales, partículas, cámaras y UI.
 
+## Versión de realidad aumentada (rama `ar`)
+
+Esta rama agrega una tercera escena, **CenoteAR**, con realidad aumentada (Vuforia Engine 11.4). Se abre desde el botón **«Ver en tu mesa (AR)»** del menú. Las escenas `MenuInicio` y `CenoteVivo` funcionan igual que en `main`.
+
+**Funcionalidades**
+
+1. **El cenote sobre la mesa.** El cenote aparece como una maqueta en miniatura sobre una mesa o el piso. Se coloca tocando la pantalla, se arrastra con un dedo, se escala pellizcando y se gira con dos dedos.
+   - Si el teléfono admite Ground Plane (ARCore), detecta la superficie solo.
+   - Si no, el cenote aparece sobre un **marcador impreso**: `Assets/CenoteVivo/AR/Marcador_CenoteVivo.png`, impreso a **20 cm de ancho**. A los 10 s sin superficie, la app también ofrece cambiar al marcador.
+2. **Etiquetas informativas.** Roca caliza, agua subterránea, raíces y contaminación. Al tocar una se abre una tarjeta con una explicación corta.
+3. **Foto con el cenote.** Captura la escena con un marco con el lema, la guarda en la galería (Imágenes › Cenote Vivo) y permite compartirla.
+
+Además siguen funcionando, sobre la maqueta, el simulador de contaminación, el día/noche, el corte del subsuelo (que siempre mira hacia el usuario) y el panel informativo.
+
+**Pensada para teléfonos de gama baja:** la selva se recorta a un diorama ligero, no hay sombras, el límite es de 30 FPS, la búsqueda de superficies se apaga al colocar el cenote y las etiquetas son UI de pantalla. Vuforia 11 exige **Android 10 (API 29)** como mínimo.
+
+**Código:** `Assets/CenoteVivo/Scripts/Runtime/AR/` (`ColocadorAR`, `EtiquetasAR`, `FotoAR`, `GaleriaAndroid`, `EspacioCenoteAR`, `PantallaARController`) y `Scripts/Editor/CenoteVivoARBuilder.cs`. Los shaders reciben la matriz «mundo → espacio del cenote» (`_CenoteMundoALocal`), así que el corte, los estratos y el viento funcionan con la miniatura movida o escalada.
+
+### Preparar el proyecto tras clonar
+
+1. **Paquete de Vuforia.** No está en el repositorio porque pesa 138 MB y supera el límite de GitHub. Descarga **Vuforia Engine 11.4.4 para Unity** desde [developer.vuforia.com](https://developer.vuforia.com/downloads/sdk) y copia `com.ptc.vuforia.engine-11.4.4.tgz` en la carpeta `Packages/`. `Packages/manifest.json` ya lo referencia.
+2. **Licencia de Vuforia.** Crea una *Basic license* gratuita en el portal de Vuforia y pégala en `Assets/Resources/VuforiaConfiguration.asset`, campo *App License Key*, desde **Vuforia Engine › Vuforia Engine Configuration**. En el repositorio la clave va vacía.
+3. Menú **Cenote Vivo ▸ 1. Construir escenas** (arma también CenoteAR) y **Cenote Vivo ▸ 3. Compilar APK (AR)**, que genera `Builds/CenoteVivoAR.apk` con el id `com.cenotevivo.ar`.
+
+## Herramientas utilizadas
+
+| Herramienta | Uso en el proyecto |
+|---|---|
+| **Unity 6.6** (6000.6.3f1) con **URP** 17.6 | Motor del juego: escenas, interfaz (uGUI), iluminación, partículas, Lit Shader Graph, Profiler y compilación para Android |
+| **Vuforia Engine** 11.4 | Realidad aumentada: Ground Plane (detección de mesa o piso), Image Target (marcador impreso) y anclas |
+| **Blender** | Modelado del cenote 3D (`cenote-prueba-7.fbx`): roca caliza, piedras, corte del subsuelo, agua y sus tres niveles de detalle (LOD0–LOD2) |
+| **Claude** (Anthropic) | Asistente de IA para programar los scripts en C#, las funciones de los Shader Graph, el generador de la selva, la optimización con el Profiler y esta documentación |
+
 ---
 
 ## 0. Cómo usarlo (rápido)
@@ -104,9 +137,10 @@ Global Volume
  └─ Sedimento suspendido     (partículas bajo el agua)
 [Selva]
  ├─ Terreno Selva            (volumen sólido con colinas y claro de pasto)
- ├─ Arboles_<anillo>_<sector>     (árboles, palmas, ceiba: proyectan sombra)
- ├─ Sotobosque_<anillo>_<sector>  (arbustos, helechos, pasto, lianas)
- └─ Lejanos_Lejos_<sector>        (muro de selva del horizonte)
+ ├─ Arboles_Sombra_<0-3>         (árboles cercanos, a menos de 1.8 R: proyectan sombra)
+ ├─ Arboles_SinSombra_<0-3>      (árboles lejanos: sin sombra, copa simplificada)
+ ├─ Sotobosque_<Cenote|Claro>_<0-3>  (arbustos, helechos, pasto, lianas; capa VegetacionDetalle)
+ └─ Lejanos                      (muro de selva del horizonte, una sola malla)
 [Noche]                      (ActivoDeNoche)
  ├─ Farol 1…4                (luces puntuales cálidas)
  ├─ Faroles (brillo)         (8 faroles emisivos en una sola malla)
@@ -194,17 +228,18 @@ El constructor genera alrededor del cenote un entorno de selva low-poly con mall
 | Elemento | Detalle |
 |---|---|
 | Terreno | Disco de ~7 veces el radio del cenote con colinas suaves. Es un **volumen sólido**, para que en el corte se vea tierra. Tiene un claro de pasto cerca del cenote y hojarasca más lejos |
-| Selva | ~175 árboles de copa redonda, ~50 palmas y una **ceiba** (árbol sagrado maya) junto al cenote como punto de referencia |
+| Selva | ~140 árboles de copa redonda, ~50 palmas y una **ceiba** (árbol sagrado maya) junto al cenote como punto de referencia |
 | Sotobosque | Arbustos (algunos con flores rosas, naranjas, blancas y rojas), helechos y matas de pasto |
 | Sobre el cenote | Pasto, helechos, arbustos y palmas pequeñas sobre la roca. La roca tiene **musgo** en las superficies planas (shader) |
 | Paredes del pozo | **Lianas y raíces** que cuelgan del borde y siguen la forma real de la pared (se detecta con raycasts sobre el modelo) |
 | Horizonte | Un muro de selva lejana y **bruma lineal** que funde todo con el cielo, para que no parezca que el cenote flota en la nada |
 
 * Todas las plantas usan un solo material (`CV_Vegetacion`) con **color por vértice**, sin texturas.
-* Se combinan en bloques por sector (8 sectores × cercanía × categoría), lo que da pocas draw calls y aun así permite descartar lo que queda fuera de cámara.
+* Se combinan en 19 mallas: 4 cuadrantes × zona × categoría, más la selva lejana en una sola malla. Así hay pocas draw calls y aun se descarta lo que queda fuera de cámara.
+* La vegetación pequeña solo se genera hasta 2.2 veces el radio del cenote, y la cámara deja de dibujarla a más de 3.4 R (componente `CullingPorDistancia`, capa `VegetacionDetalle`).
 * **Viento** en el vertex shader: el alfa del color de vértice indica cuánto se mueve cada parte (la base del tronco no se mueve; las hojas y las lianas sí).
 * Con **contaminación** la vegetación se marchita (pierde verde) y el suelo muestra manchas de derrames.
-* Solo los árboles y las palmas proyectan sombra. El pasto, los arbustos y la selva lejana no, para ahorrar.
+* Solo proyectan sombra los árboles y palmas cercanos al cenote (a menos de 1.8 R). El pasto, los arbustos, los árboles lejanos y la selva del horizonte no, para ahorrar.
 * Las mallas generadas se guardan en `Assets/CenoteVivo/Generado/Selva/`. Si cambias cantidades o tamaños en `SelvaGenerador.cs`, vuelve a ejecutar *Cenote Vivo ▸ 1. Construir escenas*. La semilla aleatoria es fija, así que el resultado se repite igual.
 
 ### 2.7 Noche: faroles dentro del cenote y luciérnagas — `ActivoDeNoche`
@@ -294,8 +329,8 @@ Para las texturas, activa **mipmaps** (son el "LOD de texturas" automático) y, 
 | Draw calls (SetPass) | < 100 (ideal < 60) |
 | Texturas | ≤ 1024 px, ASTC, mipmaps |
 | Luces en tiempo real | 1 con sombras (sol) + 1 sin sombras (luna) + 4 faroles puntuales sin sombras (solo de noche) |
-| Vegetación | ~120 k triángulos en total alrededor del cenote (≈69 k de sotobosque y pasto, ≈41 k de árboles); a la vista suele haber la mitad o menos. Un solo material, color por vértice |
-| Sombras | Hard, 1 cascada, resolución 1024 (ya configurado en `Mobile_RPAsset`) |
+| Vegetación | ~64 k triángulos en total alrededor del cenote, en 19 mallas. Un solo material, color por vértice |
+| Sombras | Hard, 1 cascada, resolución 1024, distancia 40 m (ya configurado en `Mobile_RPAsset`) |
 | Render Scale | 0.8 (ya configurado) |
 | Partículas | Basura ≤ 90 · filtraciones ≤ 300 · sedimento ≤ 250; sin colisiones |
 | UI | Un Canvas por pantalla, `RectMask2D` en lugar de `Mask`, textos sin *Raycast Target* |

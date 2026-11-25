@@ -47,3 +47,6 @@ crashlytics-buildid.txt
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Paquete de Vuforia Engine (138 MB, supera el límite de GitHub): se descarga del portal de Vuforia
+/Packages/com.ptc.vuforia.engine-*.tgz
