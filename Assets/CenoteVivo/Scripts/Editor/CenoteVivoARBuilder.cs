@@ -505,13 +505,15 @@ namespace CenoteVivo.EditorTools
             var canvas = Lienzo("Canvas_MarcoFoto", 20, out var area);
             var franja = Panel("Franja", area, new Color(0.02f, 0.09f, 0.11f, 0.82f));
             Anclar(franja.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 30f), new Vector2(1160f, 130f));
-            var gota = Panel("Gota", franja.transform, Acento);
-            gota.sprite = Circulo; gota.type = Image.Type.Simple;
-            Anclar(gota.rectTransform, new Vector2(0f, 0.5f), new Vector2(36f, 0f), new Vector2(54f, 54f));
+            var logo = Crear("Logo", franja.transform).gameObject.AddComponent<Image>();
+            logo.sprite = LogoSprite();
+            logo.preserveAspect = true;
+            logo.raycastTarget = false;
+            Anclar(logo.rectTransform, new Vector2(0f, 0.5f), new Vector2(20f, 0f), new Vector2(110f, 110f));
             var nombre = Texto("Nombre", franja.transform, "CENOTE VIVO", 44, TextoClaro, TextAnchor.UpperLeft, FontStyle.Bold);
-            Arriba(nombre.rectTransform, 120, 30, 16, 56);
+            Arriba(nombre.rectTransform, 145, 30, 16, 56);
             var lema = Texto("Lema", franja.transform, TextosCenote.Subtitulo, 32, Acento, TextAnchor.UpperLeft);
-            Arriba(lema.rectTransform, 120, 30, 72, 44);
+            Arriba(lema.rectTransform, 145, 30, 72, 44);
             canvas.gameObject.SetActive(false);
             return canvas.gameObject;
         }

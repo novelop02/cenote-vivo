@@ -74,6 +74,20 @@ namespace CenoteVivo.EditorTools
             // en la galería con MediaStore, sin pedir permiso de almacenamiento.
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel29;
             PlayerSettings.Android.forceSDCardPermission = false;
+            // Ícono de la app: el logo de Cenote Vivo (gota con el corte del subsuelo).
+            var icono = Textura(RutaIcono, false);
+            if (icono != null) PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icono }, IconKind.Any);
+#if UNITY_ANDROID
+            // Android usa el ícono adaptativo: fondo verde oscuro + logo 3D dentro de la zona segura.
+            var fondo = Textura(RutaIconoFondo, false);
+            var frente = Textura(RutaIconoFrente, false);
+            if (fondo != null && frente != null)
+            {
+                var adaptativos = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, UnityEditor.Android.AndroidPlatformIconKind.Adaptive);
+                foreach (var i in adaptativos) i.SetTextures(fondo, frente);
+                PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, UnityEditor.Android.AndroidPlatformIconKind.Adaptive, adaptativos);
+            }
+#endif
             Debug.Log("[Cenote Vivo] Android: IL2CPP + ARM64, orientación horizontal, id com.cenotevivo.ar. " +
                       "Cambia la plataforma en File > Build Profiles > Android.");
         }
@@ -804,36 +818,38 @@ namespace CenoteVivo.EditorTools
             fondo.gameObject.AddComponent<FondoDegradado>();
 
             var columna = Crear("Contenido", area);
-            Anclar(columna, new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(1300f, 900f));
+            Anclar(columna, new Vector2(0.5f, 0.5f), new Vector2(0f, 0f), new Vector2(1300f, 920f));
 
-            var gota = Panel("Gota", columna, Acento);
-            gota.sprite = Circulo; gota.type = Image.Type.Simple;
-            Anclar(gota.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(54f, 54f));
+            var logo = Crear("Logo", columna).gameObject.AddComponent<Image>();
+            logo.sprite = LogoSprite();
+            logo.preserveAspect = true;
+            logo.raycastTarget = false;
+            Anclar(logo.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(120f, 120f));
 
             var titulo = Texto("Titulo", columna, TextosCenote.Titulo, 128, TextoClaro, TextAnchor.MiddleCenter, FontStyle.Bold);
-            Arriba(titulo.rectTransform, 0, 0, 80, 150);
+            Arriba(titulo.rectTransform, 0, 0, 115, 150);
             titulo.horizontalOverflow = HorizontalWrapMode.Overflow;
             var subtitulo = Texto("Subtitulo", columna, TextosCenote.Subtitulo, 38, Acento, TextAnchor.MiddleCenter);
-            Arriba(subtitulo.rectTransform, 0, 0, 235, 56);
+            Arriba(subtitulo.rectTransform, 0, 0, 270, 56);
 
             var linea = Panel("Linea", columna, new Color(1f, 1f, 1f, 0.2f), false);
-            Anclar(linea.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -315f), new Vector2(180f, 3f));
+            Anclar(linea.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -350f), new Vector2(180f, 3f));
 
             var bloqueFrase = Crear("Frase", columna);
-            Arriba(bloqueFrase, 80, 80, 345, 150);
+            Arriba(bloqueFrase, 80, 80, 380, 150);
             var grupo = bloqueFrase.gameObject.AddComponent<CanvasGroup>();
             grupo.alpha = 0f;
             var frase = Texto("Texto", bloqueFrase, TextosCenote.FrasesImpacto[0], 36, TextoClaro, TextAnchor.MiddleCenter, FontStyle.Italic);
             Estirar(frase.rectTransform);
 
             var explorar = Boton("Boton Explorar", columna, "Explorar el cenote", Acento, TextoOscuro, 36, out _);
-            Anclar((RectTransform)explorar.transform, new Vector2(0.5f, 1f), new Vector2(-300f, -540f), new Vector2(560f, 110f));
+            Anclar((RectTransform)explorar.transform, new Vector2(0.5f, 1f), new Vector2(-300f, -575f), new Vector2(560f, 110f));
             var botonAR = Boton("Boton AR", columna, "Ver en tu mesa (AR)", new Color(0.86f, 0.5f, 0.18f), TextoOscuro, 36, out _);
-            Anclar((RectTransform)botonAR.transform, new Vector2(0.5f, 1f), new Vector2(300f, -540f), new Vector2(560f, 110f));
+            Anclar((RectTransform)botonAR.transform, new Vector2(0.5f, 1f), new Vector2(300f, -575f), new Vector2(560f, 110f));
             var acerca = Boton("Boton Acerca", columna, "¿Por qué importa?", FondoPanel, TextoClaro, 32, out _);
-            Anclar((RectTransform)acerca.transform, new Vector2(0.5f, 1f), new Vector2(0f, -670f), new Vector2(560f, 96f));
+            Anclar((RectTransform)acerca.transform, new Vector2(0.5f, 1f), new Vector2(0f, -705f), new Vector2(560f, 96f));
             var salir = Boton("Boton Salir", columna, "Salir", new Color(1f, 1f, 1f, 0f), TextoSecundario, 28, out _);
-            Anclar((RectTransform)salir.transform, new Vector2(0.5f, 1f), new Vector2(0f, -786f), new Vector2(300f, 80f));
+            Anclar((RectTransform)salir.transform, new Vector2(0.5f, 1f), new Vector2(0f, -821f), new Vector2(300f, 80f));
 
             Lienzo("Canvas_PanelAcerca", 10, out var areaAcerca);
             var modal = Modal("Panel Acerca", areaAcerca, new Vector2(1400f, 900f), out var tituloAcerca, out var cuerpo, out var cerrar);
@@ -853,6 +869,34 @@ namespace CenoteVivo.EditorTools
 
             SistemaDeEventos();
             EditorSceneManager.SaveScene(escena, EscenaMenu);
+        }
+
+        // ───────────────────────────── Logo ─────────────────────────────
+
+        const string RutaIcono = "Assets/CenoteVivo/AR/Logo/CenoteVivo_Icono.png";
+        const string RutaLogo3D = "Assets/CenoteVivo/AR/Logo/CenoteVivo_Logo3D.png";
+        const string RutaIconoFondo = "Assets/CenoteVivo/AR/Logo/CenoteVivo_IconoFondo.png";
+        const string RutaIconoFrente = "Assets/CenoteVivo/AR/Logo/CenoteVivo_IconoFrente.png";
+
+        static Texture2D Textura(string ruta, bool sprite)
+        {
+            var imp = AssetImporter.GetAtPath(ruta) as TextureImporter;
+            if (imp == null) { Debug.LogWarning("[Cenote Vivo] No se encontró " + ruta); return null; }
+            bool cambio = false;
+            var tipo = sprite ? TextureImporterType.Sprite : TextureImporterType.Default;
+            if (imp.textureType != tipo) { imp.textureType = tipo; cambio = true; }
+            if (imp.mipmapEnabled) { imp.mipmapEnabled = false; cambio = true; }
+            if (!imp.alphaIsTransparency) { imp.alphaIsTransparency = true; cambio = true; }
+            if (imp.npotScale != TextureImporterNPOTScale.None) { imp.npotScale = TextureImporterNPOTScale.None; cambio = true; }
+            if (cambio) imp.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(ruta);
+        }
+
+        /// <summary>Logo 3D de Cenote Vivo (gota con el corte del subsuelo) como sprite de UI.</summary>
+        internal static Sprite LogoSprite()
+        {
+            Textura(RutaLogo3D, true);
+            return AssetDatabase.LoadAssetAtPath<Sprite>(RutaLogo3D);
         }
 
         // ───────────────────────────── Utilidades ─────────────────────────────
